@@ -117,7 +117,10 @@ def welcome(update, context, new_member):
     # Replace placeholders and send message
     text = text.replace("$username", new_member.first_name)
     text = text.replace("$title", message.chat.title)
-    send_async(context, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
+    #send_async(context,chat_id=chat_id,text=text, parse_mode=ParseMode.HTML)
+    #send_async(new_member,chat_id=chat_id,text=text)
+    print(message.new_chat_members[0])
+    send_async(context,message.new_chat_members[0].id,"Welcome to")
 
 
 # Welcome a user to the chat
