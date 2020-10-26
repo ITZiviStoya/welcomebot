@@ -7,8 +7,10 @@ from html import escape
 
 import pickledb
 
-from telegram import ParseMode, TelegramError, Update
-from telegram.ext import Updater, MessageHandler, CommandHandler, Filters
+
+from telegram import ParseMode, TelegramError, Update, InlineKeyboardButton, InlineKeyboardMarkup, KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+from telegram.ext import Updater, MessageHandler, CommandHandler, Filters, InlineQueryHandler, ConversationHandler, \
+    CallbackContext
 from telegram.ext.dispatcher import run_async
 
 from config import BOTNAME, TOKEN
@@ -94,33 +96,83 @@ def check(update, context, override_lock=None):
     return True
 
 
+def reply(update, context):
+    print("s")
+
+
+def button1_handler(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        text='Button one',
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+
+def button2_handler(update: Update, context: CallbackContext):
+    update.message.reply_text(
+        text='Button two',
+        reply_markup=ReplyKeyboardRemove(),
+    )
+
+
+def start(update: Update, context: CallbackContext):
+    text = update.message.text
+    if text == 'Option 1':
+        return button1_handler(update, context)
+    else:
+        return button2_handler(update, context)
+
+    reply_markup = ReplyKeyboardMarkup(
+     keyboard=[
+        [
+            KeyboardButton("Option 1", callback_data='1'),
+            KeyboardButton("Option 2", callback_data='2'),
+        ],
+     ],
+     resize_keyboard=True,
+    )
+
+    update.message.reply_text(text='Please choose:', reply_markup=reply_markup)
+
+
+def button(update, context):
+    print('pressed button')
+    query = update.callback_query
+    cd = query.data
+    # CallbackQueries need to be answered, even if no notification to the user is needed
+    # Some clients may have trouble otherwise. See https://core.telegram.org/bots/api#callbackquery
+    query.answer()
+
+    query.edit_message_text(text="Selected option: {}".format(query.data))
 # Welcome a user to the chat
+
+
 def welcome(update, context, new_member):
     """ Welcomes a user to the chat """
-
     message = update.message
     chat_id = message.chat.id
+    print(new_member.id, "new member id")
+    print(message.chat.id, "message chat id")
+
+    # Pull the custom message for this chat from the database
+    text = db.get(str(chat_id))
+    # Use default message if there's no custom one set
+    if text is None:
+        text = "Hello $username! Welcome to $title 😊"
+    # print("chat_id")
+    # Replace placeholders and send message
     logger.info(
         "%s joined to chat %d (%s)",
         escape(new_member.first_name),
         chat_id,
         escape(message.chat.title),
     )
-
-    # Pull the custom message for this chat from the database
-    text = db.get(str(chat_id))
-
-    # Use default message if there's no custom one set
-    if text is None:
-        text = "Hello $username! Welcome to $title 😊"
-
-    # Replace placeholders and send message
     text = text.replace("$username", new_member.first_name)
     text = text.replace("$title", message.chat.title)
-    #send_async(context,chat_id=chat_id,text=text, parse_mode=ParseMode.HTML)
-    #send_async(new_member,chat_id=chat_id,text=text)
-    print(message.new_chat_members[0])
-    send_async(context,message.new_chat_members[0].id,"Welcome to")
+    print(chat_id, 'chat id')
+    # send_async(context, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
+    send_async(context, chat_id=chat_id, text=text, parse_mode=ParseMode.HTML)
+
+    # print(new_member.chat.id)
 
 
 # Welcome a user to the chat
@@ -339,6 +391,8 @@ def empty_message(update, context):
     group member, someone left the chat or if the bot has been added somewhere.
     """
 
+    print(update.message.chat_id, ' chat ID', update.message.message_id, 'message ID')
+    context.bot.delete_message(update.message.chat_id, update.message.message_id)
     # Keep chatlist
     chats = db.get("chats")
 
@@ -389,7 +443,7 @@ def main():
     # Get the dispatcher to register handlers
     dp = updater.dispatcher
 
-    dp.add_handler(CommandHandler("start", help))
+    dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CommandHandler("help", help))
     dp.add_handler(CommandHandler("welcome", set_welcome))
     dp.add_handler(CommandHandler("goodbye", set_goodbye))
@@ -398,8 +452,11 @@ def main():
     dp.add_handler(CommandHandler("unlock", unlock))
     dp.add_handler(CommandHandler("quiet", quiet))
     dp.add_handler(CommandHandler("unquiet", unquiet))
+    dp.add_handler(CommandHandler("reply", reply))
 
     dp.add_handler(MessageHandler(Filters.status_update, empty_message))
+
+    dp.add_handler(MessageHandler(Filters.all, callback=button1_handler))
 
     dp.add_error_handler(error)
 
